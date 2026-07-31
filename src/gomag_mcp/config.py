@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     )
 
     # --- API credentials (required) ---
-    api_key: str = Field(description="Gomag API key sent as the Apikey header on write requests")
+    api_key: str = Field(description="Gomag API key sent as the Apikey header on every request")
     api_shop: str = Field(description="Gomag shop URL sent as the ApiShop header on every request")
 
     # --- API connection ---
