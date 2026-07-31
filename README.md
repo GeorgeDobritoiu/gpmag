@@ -80,10 +80,47 @@ cp .env.example .env
 | `GOMAG_AUDIT_LOG_MAX_BYTES` | `10485760` | Max log file size before rotation (10 MB) |
 | `GOMAG_AUDIT_LOG_BACKUP_COUNT` | `5` | Number of rotated backup files to keep |
 | `GOMAG_AUDIT_LOG_TO_STDERR` | `true` | Also emit audit events to stderr |
+| `GOMAG_MCP_TRANSPORT` | `stdio` | Use `streamable-http` for ChatGPT on Render |
+| `GOMAG_MCP_PUBLIC_URL` | — | Public HTTPS service URL, without `/mcp` |
+| `GOMAG_OAUTH_ISSUER_URL` | — | OAuth/OIDC issuer URL (for example, an Auth0 tenant) |
+| `GOMAG_OAUTH_AUDIENCE` | `<public URL>/mcp` | Expected access-token audience / API identifier |
+| `GOMAG_OAUTH_JWKS_URL` | `<issuer>/.well-known/jwks.json` | Signing-key endpoint used to verify access tokens |
+| `GOMAG_OAUTH_REQUIRED_SCOPES` | `gomag:access` | Space-separated scopes required by the MCP endpoint |
 
 ---
 
 ## Integration
+
+### ChatGPT Business (remote MCP on Render)
+
+ChatGPT connects to the Streamable HTTP endpoint at:
+
+```text
+https://your-service.onrender.com/mcp
+```
+
+Remote mode deliberately refuses to start without OAuth configuration. Configure
+an OAuth 2.1 / OIDC provider (Auth0 is supported), use RS256 access tokens, create
+the `gomag:access` permission, and set these Render environment variables:
+
+```text
+GOMAG_MCP_TRANSPORT=streamable-http
+GOMAG_MCP_PUBLIC_URL=https://your-service.onrender.com
+GOMAG_OAUTH_ISSUER_URL=https://your-tenant.eu.auth0.com/
+GOMAG_OAUTH_AUDIENCE=https://your-service.onrender.com/mcp
+GOMAG_OAUTH_REQUIRED_SCOPES=gomag:access
+```
+
+Keep `GOMAG_API_KEY` only in Render. It is never sent to ChatGPT. The server
+publishes OAuth protected-resource metadata, validates issuer, audience,
+expiration, signature, and scopes on every MCP request, and exposes `/health`
+without shop or credential data for Render health checks.
+
+After deployment, in ChatGPT Business open **Workspace settings → Apps → Create**,
+enter the `/mcp` endpoint, select OAuth, complete authorization, and use
+**Scan Tools**. Test the app as a draft before publishing it to the workspace.
+Tool annotations tell ChatGPT which operations are read-only and which are
+destructive; server-side authorization and audit logging remain enforced.
 
 ### Claude Desktop
 

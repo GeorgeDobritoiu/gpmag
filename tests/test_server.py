@@ -13,6 +13,7 @@ HTTP responses and validate that:
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -123,6 +124,133 @@ def test_server_module_imports() -> None:
     import gomag_mcp.server
 
     assert gomag_mcp.server.mcp is not None
+
+
+def test_all_tools_have_safety_annotations() -> None:
+    from gomag_mcp.server import mcp
+
+    tools = mcp._tool_manager._tools
+    assert tools
+    assert all(tool.annotations is not None for tool in tools.values())
+    assert tools["product_list"].annotations.readOnlyHint is True
+    assert tools["product_update"].annotations.readOnlyHint is False
+    assert tools["product_delete"].annotations.destructiveHint is True
+    assert tools["product_update"].annotations.openWorldHint is True
+
+
+def test_remote_transport_requires_oauth(monkeypatch: pytest.MonkeyPatch) -> None:
+    from gomag_mcp.server import _create_mcp
+
+    monkeypatch.setenv("GOMAG_MCP_TRANSPORT", "streamable-http")
+    monkeypatch.delenv("GOMAG_MCP_PUBLIC_URL", raising=False)
+    monkeypatch.delenv("GOMAG_OAUTH_ISSUER_URL", raising=False)
+
+    with pytest.raises(RuntimeError, match="GOMAG_MCP_PUBLIC_URL"):
+        _create_mcp()
+
+
+def test_remote_transport_is_oauth_protected(monkeypatch: pytest.MonkeyPatch) -> None:
+    from gomag_mcp.server import _create_mcp, _register_tools
+
+    monkeypatch.setenv("GOMAG_MCP_TRANSPORT", "streamable-http")
+    monkeypatch.setenv("GOMAG_MCP_PUBLIC_URL", "https://gomag.example.com")
+    monkeypatch.setenv("GOMAG_OAUTH_ISSUER_URL", "https://auth.example.com/")
+    monkeypatch.setenv("GOMAG_OAUTH_AUDIENCE", "https://gomag.example.com/mcp")
+    monkeypatch.setenv("GOMAG_OAUTH_REQUIRED_SCOPES", "gomag:access")
+    monkeypatch.setenv("PORT", "9876")
+
+    server, transport = _create_mcp()
+    _register_tools(server, oauth_required=True)
+
+    assert transport == "streamable-http"
+    assert server.settings.host == "0.0.0.0"
+    assert server.settings.port == 9876
+    assert server.settings.streamable_http_path == "/mcp"
+    assert server.settings.auth is not None
+    assert server.settings.auth.required_scopes == ["gomag:access"]
+    assert server._token_verifier is not None
+    assert server._tool_manager._tools["product_list"].meta["securitySchemes"] == [
+        {"type": "oauth2", "scopes": ["gomag:access"]}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_oauth_verifier_accepts_valid_rs256_token() -> None:
+    import jwt
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    from gomag_mcp.auth import JWTTokenVerifier
+
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    now = int(time.time())
+    token = jwt.encode(
+        {
+            "iss": "https://auth.example.com/",
+            "aud": "https://gomag.example.com/mcp",
+            "sub": "user-1",
+            "azp": "chatgpt",
+            "scope": "openid profile",
+            "permissions": ["gomag:access"],
+            "iat": now,
+            "exp": now + 300,
+        },
+        private_key,
+        algorithm="RS256",
+        headers={"kid": "test-key"},
+    )
+    verifier = JWTTokenVerifier(
+        issuer="https://auth.example.com/",
+        audience="https://gomag.example.com/mcp",
+        jwks_url="https://auth.example.com/.well-known/jwks.json",
+    )
+    verifier._jwks = MagicMock()
+    verifier._jwks.get_signing_key_from_jwt.return_value.key = private_key.public_key()
+
+    access = await verifier.verify_token(token)
+
+    assert access is not None
+    assert access.client_id == "chatgpt"
+    assert access.subject == "user-1"
+    assert access.scopes == ["openid", "profile", "gomag:access"]
+
+
+@pytest.mark.asyncio
+async def test_remote_endpoint_rejects_missing_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    import httpx
+
+    from gomag_mcp.server import _create_mcp
+
+    monkeypatch.setenv("GOMAG_MCP_TRANSPORT", "streamable-http")
+    monkeypatch.setenv("GOMAG_MCP_PUBLIC_URL", "https://gomag.example.com")
+    monkeypatch.setenv("GOMAG_OAUTH_ISSUER_URL", "https://auth.example.com/")
+    monkeypatch.setenv("GOMAG_OAUTH_AUDIENCE", "https://gomag.example.com/mcp")
+
+    server, _ = _create_mcp()
+    transport = httpx.ASGITransport(app=server.streamable_http_app())
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="https://gomag.example.com",
+    ) as client:
+        response = await client.post(
+            "/mcp",
+            headers={"Accept": "application/json, text/event-stream"},
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-06-18",
+                    "capabilities": {},
+                    "clientInfo": {"name": "test", "version": "1"},
+                },
+            },
+        )
+        metadata = await client.get("/.well-known/oauth-protected-resource/mcp")
+
+    assert response.status_code == 401
+    assert "resource_metadata=" in response.headers["WWW-Authenticate"]
+    assert metadata.status_code == 200
+    assert metadata.json()["resource"] == "https://gomag.example.com/mcp"
 
 
 class TestGomagClient:
