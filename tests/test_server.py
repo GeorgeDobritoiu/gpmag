@@ -118,6 +118,13 @@ class TestAuditLogger:
 # Client tests
 # ---------------------------------------------------------------------------
 
+def test_server_module_imports() -> None:
+    """The installed MCP SDK must expose the FastMCP API used by the server."""
+    import gomag_mcp.server
+
+    assert gomag_mcp.server.mcp is not None
+
+
 class TestGomagClient:
     @pytest.mark.asyncio
     async def test_get_sends_api_shop_header(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
