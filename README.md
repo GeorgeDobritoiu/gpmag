@@ -115,6 +115,29 @@ tool is annotated read-only and custom reports are restricted to an allowlist
 of aggregate GA4 dimensions and metrics. ChatGPT can select this app together
 with the Gomag app to compare traffic with orders and product performance.
 
+### Google Search Console (separate read-only MCP)
+
+The `drimus-search-console-mcp` command exposes only aggregate Google organic
+search performance. Give its service account **Restricted** access to the
+Search Console property and enable the Search Console API. The Google key must
+be mounted as a secret file; the API client uses only the
+`webmasters.readonly` Google scope.
+
+```text
+SEARCH_CONSOLE_SITE_URL=sc-domain:example.com
+SEARCH_CONSOLE_GOOGLE_CREDENTIALS_FILE=/etc/secrets/drimus-search-console.json
+SEARCH_CONSOLE_MCP_TRANSPORT=streamable-http
+SEARCH_CONSOLE_MCP_PUBLIC_URL=https://your-search-console-service.onrender.com
+SEARCH_CONSOLE_OAUTH_ISSUER_URL=https://your-tenant.eu.auth0.com/
+SEARCH_CONSOLE_OAUTH_AUDIENCE=https://your-search-console-service.onrender.com/mcp
+SEARCH_CONSOLE_OAUTH_REQUIRED_SCOPES=search-console:read
+```
+
+Its tools report clicks, impressions, CTR, and average position by query, page,
+country, device, or search appearance. Every action is annotated read-only;
+custom requests accept only approved dimensions, one validated filter, and at
+most 1,000 aggregate rows.
+
 ### ChatGPT Business (remote MCP on Render)
 
 ChatGPT connects to the Streamable HTTP endpoint at:
