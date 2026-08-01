@@ -2,6 +2,10 @@
 .env
 .env.*
 !.env.example
+secrets/
+*service-account*.json
+google-credentials*.json
+gomag-504207-*.json
 
 # Audit logs — may contain sensitive business data
 *.jsonl

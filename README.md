@@ -91,6 +91,30 @@ cp .env.example .env
 
 ## Integration
 
+### Google Analytics 4 (separate read-only MCP)
+
+The repository also provides the `drimus-analytics-mcp` command. It runs a
+separate MCP server containing only read-only Google Analytics 4 tools. The
+service account needs only the **Viewer** role on the GA4 property. Its JSON key
+must be mounted as a Render Secret File and must never be committed to Git.
+
+```text
+ANALYTICS_PROPERTY_ID=449177742
+ANALYTICS_GOOGLE_CREDENTIALS_FILE=/etc/secrets/drimus-ga.json
+ANALYTICS_MCP_TRANSPORT=streamable-http
+ANALYTICS_MCP_PUBLIC_URL=https://your-analytics-service.onrender.com
+ANALYTICS_OAUTH_ISSUER_URL=https://your-tenant.eu.auth0.com/
+ANALYTICS_OAUTH_AUDIENCE=https://your-analytics-service.onrender.com/mcp
+ANALYTICS_OAUTH_REQUIRED_SCOPES=analytics:read
+```
+
+Available analytics tools are `analytics_overview`,
+`analytics_traffic_sources`, `analytics_top_pages`, `analytics_products`,
+`analytics_realtime`, `analytics_custom_report`, and `analytics_schema`. Every
+tool is annotated read-only and custom reports are restricted to an allowlist
+of aggregate GA4 dimensions and metrics. ChatGPT can select this app together
+with the Gomag app to compare traffic with orders and product performance.
+
 ### ChatGPT Business (remote MCP on Render)
 
 ChatGPT connects to the Streamable HTTP endpoint at:

@@ -17,6 +17,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
+    "google-analytics-data>=0.18.0,<1.0.0",
     "mcp>=1.0.0,<2.0.0",
     "httpx>=0.27.0",
     "PyJWT[crypto]>=2.10.0,<3.0.0",
@@ -26,6 +27,7 @@ dependencies = [
 
 [project.scripts]
 gomag-mcp = "gomag_mcp.server:main"
+drimus-analytics-mcp = "gomag_mcp.analytics_server:main"
 
 [project.optional-dependencies]
 dev = [
